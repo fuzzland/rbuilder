@@ -45,6 +45,9 @@ impl RelayConfig {
     }
 }
 
+/// Wrapper over RelayClient that allows to submit blocks and
+/// hides the particular configuration (eg: ssz, gip, optimistic).
+/// Sometimes the client is used externally.
 #[derive(Debug, Clone)]
 pub struct MevBoostRelay {
     pub id: MevBoostRelayID,
