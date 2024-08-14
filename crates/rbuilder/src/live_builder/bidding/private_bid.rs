@@ -183,28 +183,35 @@ impl SlotBidder for DynamicOverbidSlotBidder {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use crate::primitives::mev_boost::RelayConfig;
+
     use super::*;
 
     #[test]
     fn test_mev_boost_relay_submit_block() {
-
         let mut relays = Vec::<MevBoostRelay>::new();
 
-        let relay1 = MevBoostRelay::try_from_name_or_url(
-            "1",
-            format!("https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@boost-relay.flashbots.net").as_str(),
-            1, false, false, false, None, None, None, None
-        ).unwrap();
+        let config = RelayConfig {
+            name: "1".to_string(),
+            url: "https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@boost-relay.flashbots.net".to_string(),
+            priority: 1,
+            use_ssz_for_submit: false,
+            use_gzip_for_submit: false,
+            optimistic: false,
+            authorization_header: None,
+            builder_id_header: None,
+            api_token_header: None,
+            interval_between_submissions_ms: None,
+        };
+
+        let relay1 = MevBoostRelay::from_config(&config).unwrap();
         relays.push(relay1);
 
         let dd = DynamicOverbidSlotBidder::new(10, 100, 10).unwrap();
         let best_value = dd.best_bid_value(&relays, 20491752u64).unwrap();
 
         println!("best value is {:?}", best_value);
-
     }
-
 }
