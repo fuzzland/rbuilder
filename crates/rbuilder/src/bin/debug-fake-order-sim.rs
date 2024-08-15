@@ -48,7 +48,7 @@ pub async fn main() -> eyre::Result<()> {
     let tx_args = TxArgs::new_send_to_coinbase(NamedAddr::User(1), 0, coinbase_profit);
     let tx = test_context.sign_tx(tx_args)?;
     let tx = TransactionSignedEcRecoveredWithBlobs::new_no_blobs(tx).unwrap();
-    order_sender.send(OrderPoolCommand::Insert(Order::Tx(MempoolTx::new(tx))))?;
+    order_sender.send(OrderPoolCommand::Insert(Order::Tx(MempoolTx::new(tx), false)))?;
     // We expect to receive the simulation giving a profit of coinbase_profit since that's what we sent directly to coinbase.
     // and we are not paying any priority fee
     if let Some(command) = sim_results.orders.recv().await {

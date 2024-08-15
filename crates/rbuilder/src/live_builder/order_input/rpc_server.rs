@@ -44,6 +44,7 @@ pub async fn start_server_accepting_bundles(
     module.register_async_method("eth_sendBundle", move |params, _| {
         let results = results_clone.clone();
         async move {
+            info!("Received eth_sendBundle RPC call");
             let start = Instant::now();
             let raw_bundle: RawBundle = match params.one() {
                 Ok(raw_bundle) => raw_bundle,
@@ -62,7 +63,7 @@ pub async fn start_server_accepting_bundles(
                     return;
                 }
             };
-            let order = Order::Bundle(bundle);
+            let order = Order::Bundle(bundle, true);
             let parse_duration = start.elapsed();
             let target_block = order.target_block().unwrap_or_default();
             trace!(order = ?order.id(), parse_duration_mus = parse_duration.as_micros(), target_block, "Received bundle");
@@ -72,16 +73,19 @@ pub async fn start_server_accepting_bundles(
 
     let results_clone = results.clone();
     module.register_async_method("mev_sendBundle", move |params, _| {
+        info!("Received mev_sendBundle RPC call");
         handle_mev_send_bundle(results_clone.clone(), timeout, params)
     })?;
 
     let results_clone = results.clone();
     module.register_async_method("eth_cancelBundle", move |params, _| {
+        info!("Received eth_cancelBundle RPC call");
         handle_cancel_bundle(results_clone.clone(), timeout, params)
     })?;
 
     let results_clone = results.clone();
     module.register_async_method("eth_sendRawTransaction", move |params, _| {
+        info!("Received eth_sendRawTransaction RPC call");
         let start = Instant::now();
         let results = results_clone.clone();
         async move {
@@ -104,7 +108,7 @@ pub async fn start_server_accepting_bundles(
                 }
             };
             let hash = tx.tx_with_blobs.hash();
-            let order = Order::Tx(tx);
+            let order = Order::Tx(tx, true);
             let parse_duration = start.elapsed();
             trace!(order = ?order.id(), parse_duration_mus = parse_duration.as_micros(), "Received mempool tx from API");
             send_order(order, &results, timeout).await;
@@ -155,7 +159,7 @@ async fn handle_mev_send_bundle(
     };
     match decode_res {
         RawShareBundleDecodeResult::NewShareBundle(bundle) => {
-            let order = Order::ShareBundle(bundle);
+            let order = Order::ShareBundle(bundle, true);
             let parse_duration = start.elapsed();
             let target_block = order.target_block().unwrap_or_default();
             trace!(order = ?order.id(), parse_duration_mus = parse_duration.as_micros(), target_block, "Received share bundle");
@@ -178,6 +182,17 @@ async fn send_order(
     channel: &mpsc::Sender<ReplaceableOrderPoolCommand>,
     timeout: Duration,
 ) {
+    match &order {
+        Order::Bundle(_, from_rpc) |
+        Order::Tx(_, from_rpc) |
+        Order::ShareBundle(_, from_rpc) => {
+            if *from_rpc {
+                info!(order_id = %order.id(), "Sending order received from RPC to order pool");
+            } else {
+                info!(order_id = %order.id(), "Sending order not from RPC to order pool");
+            }
+        }
+    }
     send_command(ReplaceableOrderPoolCommand::Order(order), channel, timeout).await;
 }
 
@@ -222,6 +237,7 @@ async fn handle_cancel_bundle(
         cancel_bundle.replacement_uuid,
         cancel_bundle.signing_address,
     );
+    trace!(key = ?key, "Received bundle cancellation from eth_cancelBundle RPC");
     send_command(
         ReplaceableOrderPoolCommand::CancelBundle(key),
         &results,

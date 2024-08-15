@@ -135,8 +135,8 @@ impl TestDataGenerator {
         }
     }
 
-    pub fn create_tx_order(&mut self, sender_nonce: AccountNonce) -> Order {
-        Order::Tx(self.create_mempool_tx(sender_nonce))
+    pub fn create_tx_order(&mut self, sender_nonce: AccountNonce, _from_builder: bool) -> Order {
+        Order::Tx(self.create_mempool_tx(sender_nonce), _from_builder)
     }
 
     pub fn create_bundle_multi_tx_order(
@@ -144,7 +144,8 @@ impl TestDataGenerator {
         block: u64,
         txs_info: &[BundledTxInfo],
         replacement_data: Option<BundleReplacementData>,
+        _from_builder: bool
     ) -> Order {
-        Order::Bundle(self.create_bundle_multi_tx(block, txs_info, replacement_data))
+        Order::Bundle(self.create_bundle_multi_tx(block, txs_info, replacement_data), _from_builder)
     }
 }

@@ -489,9 +489,27 @@ fn inner_bundle_to_raw_bundle_no_blobs(
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum RawOrder {
-    Bundle(RawBundle),
-    Tx(RawTx),
-    ShareBundle(RawShareBundle),
+    #[serde(rename_all = "camelCase")]
+    Bundle {
+        #[serde(flatten)]
+        bundle: RawBundle,
+        #[serde(default)]
+        included: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    Tx {
+        #[serde(flatten)]
+        tx: RawTx,
+        #[serde(default)]
+        included: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ShareBundle {
+        #[serde(flatten)]
+        share_bundle: RawShareBundle,
+        #[serde(default)]
+        included: bool,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -509,20 +527,22 @@ pub enum RawOrderConvertError {
 impl RawOrder {
     pub fn decode(self, encoding: TxEncoding) -> Result<Order, RawOrderConvertError> {
         match self {
-            RawOrder::Bundle(bundle) => Ok(Order::Bundle(
+            RawOrder::Bundle { bundle, included } => Ok(Order::Bundle(
                 bundle
                     .decode(encoding)
                     .map_err(RawOrderConvertError::FailedToDecodeBundle)?,
+                included,
             )),
-            RawOrder::Tx(tx) => Ok(Order::Tx(
+            RawOrder::Tx { tx, included } => Ok(Order::Tx(
                 tx.decode(encoding)
                     .map_err(RawOrderConvertError::FailedToDecodeTransaction)?,
+                included,
             )),
-
-            RawOrder::ShareBundle(bundle) => Ok(Order::ShareBundle(
-                bundle
+            RawOrder::ShareBundle { share_bundle, included } => Ok(Order::ShareBundle(
+                share_bundle
                     .decode_new_bundle(encoding)
                     .map_err(RawOrderConvertError::FailedToDecodeShareBundle)?,
+                included,
             )),
         }
     }
@@ -531,11 +551,18 @@ impl RawOrder {
 impl From<Order> for RawOrder {
     fn from(value: Order) -> Self {
         match value {
-            Order::Bundle(bundle) => Self::Bundle(RawBundle::encode_no_blobs(bundle)),
-            Order::Tx(tx) => Self::Tx(RawTx::encode_no_blobs(tx)),
-            Order::ShareBundle(bundle) => {
-                Self::ShareBundle(RawShareBundle::encode_no_blobs(bundle))
-            }
+            Order::Bundle(bundle, included) => Self::Bundle {
+                bundle: RawBundle::encode_no_blobs(bundle),
+                included,
+            },
+            Order::Tx(tx, included) => Self::Tx {
+                tx: RawTx::encode_no_blobs(tx),
+                included,
+            },
+            Order::ShareBundle(bundle, included) => Self::ShareBundle {
+                share_bundle: RawShareBundle::encode_no_blobs(bundle),
+                included,
+            },
         }
     }
 }
@@ -562,6 +589,22 @@ mod tests {
 
         let bundle_request: RawBundle =
             serde_json::from_str(bundle_json).expect("failed to decode bundle");
+
+        assert_eq!(bundle_request.block_number, U64::from(0x1136F1F));
+        assert_eq!(bundle_request.txs.len(), 1);
+        assert_eq!(
+            bundle_request.reverting_tx_hashes,
+            vec![fixed_bytes!(
+                "da7007bee134daa707d0e7399ce35bb451674f042fbbbcac3f6a3cb77846949c"
+            )]
+        );
+        assert_eq!(bundle_request.min_timestamp, Some(0));
+        assert_eq!(bundle_request.max_timestamp, Some(1_707_136_884));
+        assert_eq!(
+            bundle_request.signing_address,
+            Some(address!("4696595f68034b47BbEc82dB62852B49a8EE7105"))
+        );
+
 
         let bundle = bundle_request
             .clone()
@@ -872,7 +915,8 @@ mod tests {
 
         let raw_order: RawOrder =
             serde_json::from_str(bundle_json).expect("failed to decode raw order with bundle");
-        assert!(matches!(raw_order, RawOrder::Bundle(_)));
+
+        assert!(matches!(raw_order, RawOrder::Bundle{..}));
 
         let raw_tx_json = r#"{
             "type": "tx",
@@ -881,6 +925,6 @@ mod tests {
 
         let raw_order: RawOrder =
             serde_json::from_str(raw_tx_json).expect("failed to decode raw order with tx");
-        assert!(matches!(raw_order, RawOrder::Tx(_)));
+        assert!(matches!(raw_order, RawOrder::Tx{..}));
     }
 }

@@ -94,7 +94,7 @@ async fn main() -> eyre::Result<()> {
                 metadata: Default::default(),
             };
             let tx = MempoolTx::new(tx);
-            Ok::<_, eyre::Error>(Order::Tx(tx))
+            Ok::<_, eyre::Error>(Order::Tx(tx, false))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

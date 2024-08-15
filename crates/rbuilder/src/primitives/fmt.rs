@@ -41,13 +41,13 @@ pub fn write_order<Buffer: Write>(
 ) -> std::fmt::Result {
     write_indent(indent, buf)?;
     match order {
-        Order::Bundle(b) => buf.write_str(&format!("B {}\n", b.hash)),
-        Order::Tx(tx) => buf.write_str(&format!(
+        Order::Bundle(b, _) => buf.write_str(&format!("B {}\n", b.hash)),
+        Order::Tx(tx, _) => buf.write_str(&format!(
             "Tx {} val {}\n",
             tx.tx_with_blobs.hash(),
             tx.tx_with_blobs.tx.value()
         )),
-        Order::ShareBundle(sb) => {
+        Order::ShareBundle(sb, _) => {
             buf.write_str(&format!("ShB {:?}\n", sb.hash))?;
             write_share_bundle_inner(indent + 1, buf, &sb.inner_bundle)
         }

@@ -559,9 +559,9 @@ impl MempoolTx {
 /// Main type used for block building, we build blocks as sequences of Orders
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Order {
-    Bundle(Bundle),
-    Tx(MempoolTx),
-    ShareBundle(ShareBundle),
+    Bundle(Bundle, bool),
+    Tx(MempoolTx, bool),
+    ShareBundle(ShareBundle, bool),
 }
 
 /// Uniquely identifies a replaceable sbundle
@@ -602,9 +602,9 @@ impl Order {
     /// Partial execution is valid as long as some tx is left.
     pub fn can_execute_with_block_base_fee(&self, block_base_fee: u128) -> bool {
         match self {
-            Order::Bundle(bundle) => bundle.can_execute_with_block_base_fee(block_base_fee),
-            Order::Tx(tx) => tx.tx_with_blobs.tx.max_fee_per_gas() >= block_base_fee,
-            Order::ShareBundle(bundle) => bundle.can_execute_with_block_base_fee(block_base_fee),
+            Order::Bundle(bundle, _) => bundle.can_execute_with_block_base_fee(block_base_fee),
+            Order::Tx(tx, _) => tx.tx_with_blobs.tx.max_fee_per_gas() >= block_base_fee,
+            Order::ShareBundle(bundle, _) => bundle.can_execute_with_block_base_fee(block_base_fee),
         }
     }
 
@@ -614,9 +614,9 @@ impl Order {
     /// Non virtual orders should return self
     pub fn original_orders(&self) -> Vec<&Order> {
         match self {
-            Order::Bundle(_) => vec![self],
-            Order::Tx(_) => vec![self],
-            Order::ShareBundle(sb) => {
+            Order::Bundle(_, _) => vec![self],
+            Order::Tx(_, _) => vec![self],
+            Order::ShareBundle(sb, _) => {
                 let res = sb.original_orders();
                 if res.is_empty() {
                     //fallback to this order
@@ -631,34 +631,34 @@ impl Order {
     /// BundledTxInfo for all the child txs
     pub fn nonces(&self) -> Vec<Nonce> {
         match self {
-            Order::Bundle(bundle) => bundle.nonces(),
-            Order::Tx(tx) => vec![Nonce {
+            Order::Bundle(bundle, _) => bundle.nonces(),
+            Order::Tx(tx, _) => vec![Nonce {
                 nonce: tx.tx_with_blobs.tx.nonce(),
                 address: tx.tx_with_blobs.tx.signer(),
                 optional: false,
             }],
-            Order::ShareBundle(bundle) => bundle.nonces(),
+            Order::ShareBundle(bundle, _) => bundle.nonces(),
         }
     }
 
     pub fn id(&self) -> OrderId {
         match self {
-            Order::Bundle(bundle) => OrderId::Bundle(bundle.uuid),
-            Order::Tx(tx) => OrderId::Tx(tx.tx_with_blobs.tx.hash()),
-            Order::ShareBundle(bundle) => OrderId::ShareBundle(bundle.hash),
+            Order::Bundle(bundle, _) => OrderId::Bundle(bundle.uuid),
+            Order::Tx(tx, _) => OrderId::Tx(tx.tx_with_blobs.tx.hash()),
+            Order::ShareBundle(bundle, _) => OrderId::ShareBundle(bundle.hash),
         }
     }
 
     pub fn is_tx(&self) -> bool {
-        matches!(self, Order::Tx(_))
+        matches!(self, Order::Tx(_, _))
     }
 
     /// Vec<(Tx, allowed to revert)>
     pub fn list_txs(&self) -> Vec<(&TransactionSignedEcRecoveredWithBlobs, bool)> {
         match self {
-            Order::Bundle(bundle) => bundle.list_txs(),
-            Order::Tx(tx) => vec![(&tx.tx_with_blobs, true)],
-            Order::ShareBundle(bundle) => bundle.list_txs(),
+            Order::Bundle(bundle, _) => bundle.list_txs(),
+            Order::Tx(tx, _) => vec![(&tx.tx_with_blobs, true)],
+            Order::ShareBundle(bundle, _) => bundle.list_txs(),
         }
     }
 
@@ -669,14 +669,14 @@ impl Order {
 
     pub fn replacement_key_and_sequence_number(&self) -> Option<(OrderReplacementKey, u64)> {
         match self {
-            Order::Bundle(bundle) => bundle.replacement_data.as_ref().map(|r| {
+            Order::Bundle(bundle, _) => bundle.replacement_data.as_ref().map(|r| {
                 (
                     OrderReplacementKey::Bundle(r.clone().key),
                     r.sequence_number,
                 )
             }),
-            Order::Tx(_) => None,
-            Order::ShareBundle(sbundle) => sbundle.replacement_data.as_ref().map(|r| {
+            Order::Tx(_, _) => None,
+            Order::ShareBundle(sbundle, _) => sbundle.replacement_data.as_ref().map(|r| {
                 (
                     OrderReplacementKey::ShareBundle(r.clone().key),
                     r.sequence_number,
@@ -693,26 +693,26 @@ impl Order {
 
     pub fn target_block(&self) -> Option<u64> {
         match self {
-            Order::Bundle(bundle) => Some(bundle.block),
-            Order::Tx(_) => None,
-            Order::ShareBundle(bundle) => Some(bundle.block),
+            Order::Bundle(bundle, _) => Some(bundle.block),
+            Order::Tx(_, _) => None,
+            Order::ShareBundle(bundle, _) => Some(bundle.block),
         }
     }
 
     /// Address that signed the bundle request
     pub fn signer(&self) -> Option<Address> {
         match self {
-            Order::Bundle(bundle) => bundle.signer,
-            Order::ShareBundle(bundle) => bundle.signer,
-            Order::Tx(_) => None,
+            Order::Bundle(bundle, _) => bundle.signer,
+            Order::ShareBundle(bundle, _) => bundle.signer,
+            Order::Tx(_, _) => None,
         }
     }
 
     pub fn metadata(&self) -> &Metadata {
         match self {
-            Order::Bundle(bundle) => &bundle.metadata,
-            Order::Tx(tx) => &tx.tx_with_blobs.metadata,
-            Order::ShareBundle(bundle) => &bundle.metadata,
+            Order::Bundle(bundle, _) => &bundle.metadata,
+            Order::Tx(tx, _) => &tx.tx_with_blobs.metadata,
+            Order::ShareBundle(bundle, _) => &bundle.metadata,
         }
     }
 }

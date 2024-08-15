@@ -125,7 +125,7 @@ impl RelayDB {
                         })
                     });
 
-                    let order = RawOrder::Bundle(raw_bundle)
+                    let order = RawOrder::Bundle{bundle: raw_bundle,  included: false}
                         .decode(TxEncoding::NoBlobData)
                         .wrap_err_with(|| format!("Failed to parse bundle {}", bundle_hash))?;
 
@@ -267,7 +267,7 @@ impl RelayDB {
                 continue;
             }
 
-            let raw_order = RawOrder::ShareBundle(bundle);
+            let raw_order = RawOrder::ShareBundle{share_bundle: bundle,  included: false};
 
             let order: Order = raw_order
                 .decode(TxEncoding::NoBlobData)

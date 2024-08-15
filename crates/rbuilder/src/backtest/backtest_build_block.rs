@@ -150,7 +150,7 @@ pub async fn run_backtest_build_block<ConfigType: LiveBuilderConfig>() -> eyre::
                         order_result.gas_used,
                         format_ether(order_result.coinbase_profit),
                     );
-                    if let Order::Bundle(_) | Order::ShareBundle(_) = order_result.order {
+                    if let Order::Bundle(_, _) | Order::ShareBundle(_, _) = order_result.order {
                         for tx in &order_result.txs {
                             println!("      ↳ {:?}", tx.hash());
                         }

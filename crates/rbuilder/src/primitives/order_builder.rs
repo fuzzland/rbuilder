@@ -9,9 +9,9 @@ use super::{
 /// Helper object to build Orders for testing.
 #[derive(Debug)]
 pub enum OrderBuilder {
-    MempoolTx(Option<TransactionSignedEcRecoveredWithBlobs>),
-    Bundle(BundleBuilder),
-    ShareBundle(ShareBundleBuilder),
+    MempoolTx(Option<TransactionSignedEcRecoveredWithBlobs>, bool),
+    Bundle(BundleBuilder, bool),
+    ShareBundle(ShareBundleBuilder, bool),
     None,
 }
 
@@ -19,12 +19,12 @@ impl OrderBuilder {
     pub fn build_order(&mut self) -> Order {
         let builder = mem::replace(self, OrderBuilder::None);
         match builder {
-            OrderBuilder::MempoolTx(tx) => {
+            OrderBuilder::MempoolTx(tx, from_builder) => {
                 let tx = tx.expect("No transactions for mempool tx order.");
-                Order::Tx(MempoolTx::new(tx))
+                Order::Tx(MempoolTx::new(tx, ), from_builder)
             }
-            OrderBuilder::Bundle(builder) => Order::Bundle(builder.build()),
-            OrderBuilder::ShareBundle(builder) => Order::ShareBundle(builder.build()),
+            OrderBuilder::Bundle(builder, from_builder) => Order::Bundle(builder.build(), from_builder),
+            OrderBuilder::ShareBundle(builder, from_builder) => Order::ShareBundle(builder.build(), from_builder),
             OrderBuilder::None => panic!("Order building was not started"),
         }
     }
@@ -38,26 +38,26 @@ impl OrderBuilder {
 
     pub fn start_bundle_builder(&mut self, block: u64) {
         self.assert_none();
-        *self = OrderBuilder::Bundle(BundleBuilder::new(block))
+        *self = OrderBuilder::Bundle(BundleBuilder::new(block), false)
     }
 
     pub fn start_share_bundle_builder(&mut self, block: u64, max_block: u64) {
         self.assert_none();
-        *self = OrderBuilder::ShareBundle(ShareBundleBuilder::new(block, max_block));
+        *self = OrderBuilder::ShareBundle(ShareBundleBuilder::new(block, max_block), false);
     }
 
     pub fn start_mempool_tx_builder(&mut self) {
         self.assert_none();
-        *self = OrderBuilder::MempoolTx(None);
+        *self = OrderBuilder::MempoolTx(None, false);
     }
 
     pub fn add_tx(
         &mut self,
         tx_with_blobs: TransactionSignedEcRecoveredWithBlobs,
-        revert_behavior: TxRevertBehavior,
+        revert_behavior: TxRevertBehavior
     ) {
         match self {
-            OrderBuilder::MempoolTx(opt) => {
+            OrderBuilder::MempoolTx(opt, _) => {
                 assert!(opt.is_none(), "Only one tx can be inside mempool tx order");
                 assert!(
                     revert_behavior.can_revert(),
@@ -65,10 +65,10 @@ impl OrderBuilder {
                 );
                 *opt = Some(tx_with_blobs);
             }
-            OrderBuilder::Bundle(builder) => {
+            OrderBuilder::Bundle(builder, _) => {
                 builder.add_tx(tx_with_blobs, revert_behavior.can_revert());
             }
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder, _) => {
                 builder.add_tx(tx_with_blobs, revert_behavior);
             }
             OrderBuilder::None => {
@@ -80,7 +80,7 @@ impl OrderBuilder {
     // bundle methods
     pub fn set_bundle_timestamp(&mut self, min_timestamp: Option<u64>, max_timestamp: Option<u64>) {
         match self {
-            OrderBuilder::Bundle(builder) => {
+            OrderBuilder::Bundle(builder, _) => {
                 builder.set_bundle_timestamp(min_timestamp, max_timestamp);
             }
             _ => panic!("Only Bundle can have timestamp params"),
@@ -89,7 +89,7 @@ impl OrderBuilder {
 
     pub fn set_bundle_replacement_data(&mut self, data: BundleReplacementData) {
         match self {
-            OrderBuilder::Bundle(builder) => {
+            OrderBuilder::Bundle(builder, _) => {
                 builder.set_bundle_replacement_data(data);
             }
             _ => panic!("Only Bundle can have timestamp params"),
@@ -99,7 +99,7 @@ impl OrderBuilder {
     // nested bundle methods
     pub fn start_inner_bundle(&mut self, can_skip: bool) {
         match self {
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder,  _) => {
                 builder.start_inner_bundle(can_skip);
             }
             _ => panic!("Only ShareBundle can have inner bundle"),
@@ -108,7 +108,7 @@ impl OrderBuilder {
 
     pub fn finish_inner_bundle(&mut self) {
         match self {
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder, _) => {
                 builder.finish_inner_bundle();
             }
             _ => panic!("Only ShareBundle can have inner bundle"),
@@ -117,7 +117,7 @@ impl OrderBuilder {
 
     pub fn set_inner_bundle_refund(&mut self, refund: Vec<Refund>) {
         match self {
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder, _) => {
                 builder.set_inner_bundle_refund(refund);
             }
             _ => panic!("Only ShareBundle can have refund"),
@@ -126,7 +126,7 @@ impl OrderBuilder {
 
     pub fn set_inner_bundle_refund_config(&mut self, refund_config: Vec<RefundConfig>) {
         match self {
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder, _) => {
                 builder.set_inner_bundle_refund_config(refund_config);
             }
             _ => panic!("Only ShareBundle can have refund config"),
@@ -135,7 +135,7 @@ impl OrderBuilder {
 
     pub fn set_inner_bundle_original_order_id(&mut self, original_order_id: OrderId) {
         match self {
-            OrderBuilder::ShareBundle(builder) => {
+            OrderBuilder::ShareBundle(builder, _) => {
                 builder.set_inner_bundle_original_order_id(original_order_id);
             }
             _ => panic!("Only ShareBundle can have refund config"),

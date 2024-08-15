@@ -482,7 +482,7 @@ fn test_bundle_consistency_check() -> eyre::Result<()> {
         if let Order::Bundle(Bundle {
             reverting_tx_hashes,
             ..
-        }) = &mut res.order
+        }, _) = &mut res.order
         {
             reverting_tx_hashes.clear();
         } else {

@@ -96,7 +96,7 @@ impl BlocksProcessorClient {
             .included_orders
             .iter()
             .filter_map(|res| {
-                if let Order::Bundle(bundle) = &res.order {
+                if let Order::Bundle(bundle, _) = &res.order {
                     Some(UsedBundle {
                         mev_gas_price: res.inplace_sim.mev_gas_price,
                         total_eth: res.inplace_sim.coinbase_profit,
@@ -182,7 +182,7 @@ impl BlocksProcessorClient {
             .included_orders
             .iter()
             .flat_map(|exec_result| {
-                if let Order::ShareBundle(sbundle) = &exec_result.order {
+                if let Order::ShareBundle(sbundle, _) = &exec_result.order {
                     // don't like having special cases (merged vs not merged), can we improve this?
                     let filtered_sbundles = if sbundle.is_merged_order() {
                         // We include only original orders that are contained in original_order_ids.
@@ -191,7 +191,7 @@ impl BlocksProcessorClient {
                             .original_orders
                             .iter()
                             .filter_map(|sub_order| {
-                                if let Order::ShareBundle(sbundle) = sub_order {
+                                if let Order::ShareBundle(sbundle, _) = sub_order {
                                     if exec_result.original_order_ids.contains(&sub_order.id()) {
                                         Some(sbundle)
                                     } else {

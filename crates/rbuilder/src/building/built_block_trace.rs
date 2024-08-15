@@ -87,9 +87,9 @@ impl BuiltBlockTrace {
         self.included_orders
             .iter()
             .fold((0, 0, 0), |acc, order| match order.order {
-                Order::Tx(_) => (acc.0 + 1, acc.1, acc.2),
-                Order::Bundle(_) => (acc.0, acc.1 + 1, acc.2),
-                Order::ShareBundle(_) => (acc.0, acc.1, acc.2 + 1),
+                Order::Tx(_, _) => (acc.0 + 1, acc.1, acc.2),
+                Order::Bundle(_, _) => (acc.0, acc.1 + 1, acc.2),
+                Order::ShareBundle(_, _) => (acc.0, acc.1, acc.2 + 1),
             })
     }
 

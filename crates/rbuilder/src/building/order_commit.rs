@@ -976,7 +976,7 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
     ) -> Result<Result<OrderOk, OrderErr>, CriticalCommitOrderError> {
         let coinbase_balance_before = self.state.balance(ctx.block_env.coinbase)?;
         match order {
-            Order::Tx(tx) => {
+            Order::Tx(tx, _) => {
                 let res = self.commit_tx(
                     &tx.tx_with_blobs,
                     ctx,
@@ -1013,7 +1013,7 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
                     Err(err) => Ok(Err(err.into())),
                 }
             }
-            Order::Bundle(bundle) => {
+            Order::Bundle(bundle, _) => {
                 let res = self.commit_bundle(
                     bundle,
                     ctx,
@@ -1051,7 +1051,7 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
                     Err(err) => Ok(Err(err.into())),
                 }
             }
-            Order::ShareBundle(bundle) => {
+            Order::ShareBundle(bundle, _) => {
                 let res = self.commit_share_bundle(
                     bundle,
                     ctx,

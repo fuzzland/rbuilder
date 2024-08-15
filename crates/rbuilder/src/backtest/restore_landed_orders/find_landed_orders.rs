@@ -18,7 +18,7 @@ impl SimplifiedOrder {
     pub fn new_from_order(order: &Order) -> Self {
         let id = order.id();
         match order {
-            Order::Tx(tx) => SimplifiedOrder::new(
+            Order::Tx(tx, _) => SimplifiedOrder::new(
                 id,
                 vec![OrderChunk::new(
                     vec![(tx.tx_with_blobs.hash(), TxRevertBehavior::AllowedIncluded)],
@@ -26,7 +26,7 @@ impl SimplifiedOrder {
                     0,
                 )],
             ),
-            Order::Bundle(_) => {
+            Order::Bundle(_, _) => {
                 let txs = order
                     .list_txs()
                     .into_iter()
@@ -41,7 +41,7 @@ impl SimplifiedOrder {
                     .collect();
                 SimplifiedOrder::new(id, vec![OrderChunk::new(txs, false, 0)])
             }
-            Order::ShareBundle(bundle) => SimplifiedOrder::new(
+            Order::ShareBundle(bundle, _) => SimplifiedOrder::new(
                 id,
                 OrderChunk::chunks_from_inner_share_bundle(&bundle.inner_bundle),
             ),
@@ -720,7 +720,7 @@ mod tests {
     fn test_simplified_order_conversion_mempool_tx() {
         let order = Order::Tx(MempoolTx {
             tx_with_blobs: tx(0x01),
-        });
+        }, false);
         let expected = SimplifiedOrder::new(
             OrderId::Tx(hash(0x01)),
             vec![OrderChunk::new(
@@ -747,7 +747,7 @@ mod tests {
             replacement_data: None,
             signer: None,
             metadata: Default::default(),
-        });
+        }, false);
         let expected = SimplifiedOrder::new(
             OrderId::Bundle(uuid::uuid!("00000000-0000-0000-0000-ffff00000002")),
             vec![OrderChunk::new(
@@ -836,7 +836,7 @@ mod tests {
             replacement_data: None,
             original_orders: vec![],
             metadata: Default::default(),
-        });
+        }, false);
         let expected = SimplifiedOrder::new(
             OrderId::ShareBundle(hash(0xb1)),
             vec![

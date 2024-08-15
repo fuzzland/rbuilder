@@ -30,7 +30,7 @@ struct BrokenDownShareBundle {
 impl BrokenDownShareBundle {
     /// This should always be Some since we only create BrokenDownShareBundles from ShareBundle
     pub fn sbundle(&self) -> Option<&ShareBundle> {
-        if let Order::ShareBundle(sbundle) = &self.sim_order.order {
+        if let Order::ShareBundle(sbundle, _) = &self.sim_order.order {
             return Some(sbundle);
         }
         None
@@ -146,7 +146,7 @@ impl<SinkType: SimulatedOrderSink> MultiBackrunManager<SinkType> {
         };
         sbundle.hash_slow();
         Some(SimulatedOrder {
-            order: Order::ShareBundle(sbundle),
+            order: Order::ShareBundle(sbundle, false),
             sim_value: highest_payback_order.sim_order.sim_value.clone(),
             prev_order: None,
             used_state_trace: highest_payback_order.sim_order.used_state_trace.clone(),
@@ -269,7 +269,7 @@ impl<SinkType: SimulatedOrderSink> ShareBundleMerger<SinkType> {
     /// Tries to analyze if the order is a mergeable sbundle by looking at its structure to check if this is a user txs or a backrun sbundle
     /// Only check here is if Signer is in selected_signers
     fn break_down_bundle(&self, order: &SimulatedOrder) -> Option<BrokenDownShareBundle> {
-        let sbundle = if let Order::ShareBundle(sbundle) = order.order.clone() {
+        let sbundle = if let Order::ShareBundle(sbundle, _) = order.order.clone() {
             sbundle
         } else {
             return None;
@@ -445,7 +445,7 @@ mod test {
         let order = context
             .data_gen
             .base
-            .create_tx_order(AccountNonce::default());
+            .create_tx_order(AccountNonce::default(), false);
         context.assert_passes_as_is(order);
 
         // Bundle
@@ -453,7 +453,7 @@ mod test {
             .data_gen
             .base
             .create_bundle(0, AccountNonce::default(), None);
-        context.assert_passes_as_is(Order::Bundle(bundle));
+        context.assert_passes_as_is(Order::Bundle(bundle, false));
     }
 
     #[test]
@@ -465,7 +465,7 @@ mod test {
             .inner_bundle
             .refund
             .push(sbundle.inner_bundle.refund[0].clone());
-        context.assert_passes_as_is(Order::ShareBundle(sbundle));
+        context.assert_passes_as_is(Order::ShareBundle(sbundle, false));
     }
 
     #[test]

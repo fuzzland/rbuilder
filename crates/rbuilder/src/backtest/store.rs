@@ -495,9 +495,9 @@ impl HistoricalDataStorage {
 
 fn order_type(order: &RawOrder) -> &'static str {
     match order {
-        RawOrder::Bundle(_) => "bundle",
-        RawOrder::Tx(_) => "tx",
-        RawOrder::ShareBundle(_) => "sbundle",
+        RawOrder::Bundle { .. } => "bundle",
+        RawOrder::Tx { .. } => "tx",
+        RawOrder::ShareBundle { .. } => "sbundle",
     }
 }
 
@@ -639,16 +639,16 @@ mod test {
         let orders: Vec<OrdersWithTimestamp> = vec![
             RawOrdersWithTimestamp {
                 timestamp_ms: 10,
-                order: RawOrder::Tx(RawTx {
+                order: RawOrder::Tx{tx: RawTx {
                     tx: tx.clone().into(),
-                }),
+                }, included: false},
                 sim_value: None,
             }
             .decode(TxEncoding::WithBlobData)
             .unwrap(),
             RawOrdersWithTimestamp {
                 timestamp_ms: 11,
-                order: RawOrder::Bundle(RawBundle {
+                order: RawOrder::Bundle{bundle: RawBundle {
                     block_number: U64::from(12),
                     txs: vec![tx.clone().into()],
                     reverting_tx_hashes: vec![],
@@ -659,7 +659,7 @@ mod test {
                     min_timestamp: None,
                     max_timestamp: Some(100),
                     replacement_nonce: Some(0),
-                }),
+                }, included: false},
                 sim_value: Some(SimValue {
                     coinbase_profit: U256::from(42u64),
                     gas_used: 21000,

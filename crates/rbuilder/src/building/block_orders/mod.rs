@@ -267,7 +267,7 @@ mod test {
             tx_nonce: &AccountNonce,
             tx_profit: u64,
         ) -> SimulatedOrder {
-            let order = self.data_gen.base.create_tx_order(tx_nonce.clone());
+            let order = self.data_gen.base.create_tx_order(tx_nonce.clone(), false);
             let order = self.data_gen.create_sim_order(order, tx_profit, tx_profit);
             self.order_pool.add_order(order.clone());
             order
@@ -281,7 +281,7 @@ mod test {
         ) -> SimulatedOrder {
             let order = self.data_gen.base.create_bundle_multi_tx_order(
                 0, // in the context of BlockOrders we don't care about the block (it's prefiltered)
-                txs_info, None,
+                txs_info, None, false
             );
             let order = self
                 .data_gen

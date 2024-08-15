@@ -129,7 +129,7 @@ impl BlockData {
             .available_orders
             .iter()
             .filter_map(|o| match &o.order {
-                Order::Tx(tx) => Some(tx.tx_with_blobs.hash()),
+                Order::Tx(tx, _) => Some(tx.tx_with_blobs.hash()),
                 _ => None,
             })
             .collect::<HashSet<_>>();

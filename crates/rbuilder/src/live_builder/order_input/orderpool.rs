@@ -116,7 +116,7 @@ impl OrderPool {
                 self.mempool_txs.push((order.clone(), Instant::now()));
                 (order, None)
             }
-            Order::Bundle(bundle) => {
+            Order::Bundle(bundle, _) => {
                 let target_block = bundle.block;
                 let bundles_store = self
                     .bundles_by_target_block
@@ -125,7 +125,7 @@ impl OrderPool {
                 bundles_store.bundles.push(order.clone());
                 (order, Some(target_block))
             }
-            Order::ShareBundle(bundle) => {
+            Order::ShareBundle(bundle, _) => {
                 let target_block = bundle.block;
                 let bundles_store = self
                     .bundles_by_target_block

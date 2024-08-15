@@ -268,9 +268,9 @@ impl fmt::Debug for OrderCounter {
 impl OrderCounter {
     fn accumulate(&mut self, order: &Order) {
         match order {
-            Order::Tx(_) => self.mempool_txs += 1,
-            Order::Bundle(_) => self.bundles += 1,
-            Order::ShareBundle(_) => self.share_bundles += 1,
+            Order::Tx(_, _) => self.mempool_txs += 1,
+            Order::Bundle(_, _) => self.bundles += 1,
+            Order::ShareBundle(_, _) => self.share_bundles += 1,
         }
     }
     fn total(&self) -> usize {

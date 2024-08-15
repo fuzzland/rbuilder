@@ -137,12 +137,12 @@ impl<TestedSinkType: SimulatedOrderSink> TestContext<TestedSinkType> {
         backruns[0].signer = hi_signer;
         backruns[1].signer = low_signer;
         let br_hi = self.create_sim_order(
-            Order::ShareBundle(backruns[0].clone()),
+            Order::ShareBundle(backruns[0].clone(), false),
             HI_PROFIT,
             DONT_CARE_GAS_PRICE,
         );
         let br_low = self.create_sim_order(
-            Order::ShareBundle(backruns[1].clone()),
+            Order::ShareBundle(backruns[1].clone(), false),
             LOW_PROFIT,
             DONT_CARE_GAS_PRICE,
         );
@@ -219,9 +219,9 @@ impl<TestedSinkType: SimulatedOrderSink> TestContext<TestedSinkType> {
 
     fn as_sbundle(item: &Order) -> &ShareBundle {
         match item {
-            Order::Bundle(_) => panic!("Order::Bundle expecting ShareBundle"),
-            Order::Tx(_) => panic!("Order::Tx expecting ShareBundle"),
-            Order::ShareBundle(sb) => sb,
+            Order::Bundle(_, _) => panic!("Order::Bundle expecting ShareBundle"),
+            Order::Tx(_, _) => panic!("Order::Tx expecting ShareBundle"),
+            Order::ShareBundle(sb, _) => sb,
         }
     }
 

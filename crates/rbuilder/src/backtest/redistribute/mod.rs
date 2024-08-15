@@ -299,12 +299,12 @@ fn order_redistribution_address(order: &Order, protect_signers: &[Address]) -> O
     }
 
     match order {
-        Order::Bundle(bundle) => {
+        Order::Bundle(bundle, _) => {
             // if its just a bundle we take origin tx of the first transaction
             let tx = bundle.txs.first()?;
             Some(tx.tx.signer())
         }
-        Order::ShareBundle(bundle) => {
+        Order::ShareBundle(bundle, _) => {
             // if it is a share bundle we take either
             // 1. last address from the refund config
             // 2. origin of the first tx
@@ -317,7 +317,7 @@ fn order_redistribution_address(order: &Order, protect_signers: &[Address]) -> O
             let (first_tx, _) = txs.first()?;
             Some(first_tx.tx.signer())
         }
-        Order::Tx(_) => {
+        Order::Tx(_, _) => {
             unreachable!("Mempool tx order can't have signer");
         }
     }
