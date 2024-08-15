@@ -8,7 +8,7 @@ use crate::primitives::mev_boost::MevBoostRelay;
 
 use super::{SealInstruction, SlotBidder};
 use serde::{Deserialize, Deserializer, Serialize};
-
+use curl::easy::Easy;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct BidTrace {
@@ -79,7 +79,6 @@ pub struct DynamicOverbidSlotBidder {
     overbid_increment: u64,
     current_overbid_percentage: u64,
     best_bid: Mutex<U256>,
-    client: reqwest::Client
 }
 
 impl DynamicOverbidSlotBidder {
@@ -100,43 +99,41 @@ impl DynamicOverbidSlotBidder {
             overbid_increment,
             current_overbid_percentage: initial_overbid_percentage,
             best_bid: Mutex::new(U256::from(0u64)),
-            client: reqwest::Client::new(),
         })
     }
 
-    pub async fn get_builder_bids(&self, url: &str, block_num: u64) -> Option<Vec<BidTrace>> {
+    pub fn get_builder_bids(&self, url: &str, block_num: u64) -> Option<Vec<BidTrace>> {
         let url = format!("{}?block_number={}", url, block_num);
-        let res = match self
-            .client
-            .get(url)
-            .header("accept", "application/json")
-            .send()
-            .await
-        {
-            Ok(response) =>  {
-                response
-            }
-            Err(e) => {
-                eprintln!("Error getting block bids: {}", e);
-                return None;
-            }
-        };
+        let mut easy = Easy::new();
+        easy.url(&url).unwrap();
 
-        let bid_traces = match res.json::<Vec<BidTrace>>().await {
-            Ok(data) => data,
+        let mut data = Vec::new();
+        {
+            let mut transfer = easy.transfer();
+            transfer.write_function(|new_data| {
+                data.extend_from_slice(new_data);
+                Ok(new_data.len())
+            }).unwrap();
+
+            transfer.perform().unwrap();
+        }
+
+        let response = String::from_utf8_lossy(&data);
+
+        match serde_json::from_str::<Vec<BidTrace>>(&response) {
+            Ok(bid_traces) => Some(bid_traces),
             Err(e) => {
                 eprintln!("Error decoding bids: {}", e);
-                return None;
+                None
             }
-        };
-        Some(bid_traces)
+        }
     }
 
-    pub async fn update_best_bid(&self, relays: &Vec<MevBoostRelay>, block_number: u64) {
+    pub fn update_best_bid(&self, relays: &Vec<MevBoostRelay>, block_number: u64) {
         for relay in relays.iter() {
             let client_url = relay.get_client().url.as_str();
             let url =  format!("{}relay/v1/data/bidtraces/builder_blocks_received", client_url);
-            if let Some(bid_traces) = self.get_builder_bids(url.as_str(), block_number).await {
+            if let Some(bid_traces) = self.get_builder_bids(url.as_str(), block_number) {
                 if !bid_traces.is_empty() {
                     let mut best_bid = self.best_bid.lock().unwrap();
                     if bid_traces[0].value > *best_bid {
@@ -161,9 +158,9 @@ impl SlotBidder for DynamicOverbidSlotBidder {
         true
     }
 
-    fn seal_instruction(&self, unsealed_block_profit: U256, _slot_timestamp: OffsetDateTime) -> SealInstruction {
-        let bid = self.calculate_bid(unsealed_block_profit);
-        if bid > U256::ZERO && bid <= unsealed_block_profit {
+    fn seal_instruction(&self, _unsealed_block_profit: U256, _slot_timestamp: OffsetDateTime) -> SealInstruction {
+        let bid = self.calculate_bid(_unsealed_block_profit);
+        if bid > U256::ZERO {
             info!("Sealing with bid: {}", bid);
             SealInstruction::Value(bid)
         } else {
@@ -173,11 +170,7 @@ impl SlotBidder for DynamicOverbidSlotBidder {
     }
 
     fn best_bid_value(&self, relays: &Vec<MevBoostRelay>, block_number: u64) -> Option<U256> {
-        tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(async {
-            self.update_best_bid(relays, block_number).await;
-        });
+        self.update_best_bid(relays, block_number);
         Some(*self.best_bid.lock().unwrap())
 
     }

@@ -73,3 +73,4 @@ alloy-rpc-types-engine = { git = "https://github.com/alloy-rs/alloy", version = 
 ] }
 alloy-rpc-types-eth = { git = "https://github.com/alloy-rs/alloy", version = "0.2" }
 alloy-signer-local = { git = "https://github.com/alloy-rs/alloy", version = "0.2" }
+curl = "0.4.46"
