@@ -2,7 +2,7 @@
 //!
 use crate::{
     building::builders::BuilderSinkFactory,
-    live_builder::{bidding::DummyBiddingService, order_input::OrderInputConfig, LiveBuilder},
+    live_builder::{order_input::OrderInputConfig, LiveBuilder},
     telemetry::{setup_reloadable_tracing_subscriber, LoggerConfig},
     utils::{http_provider, BoxedProvider, ProviderFactoryReopener, Signer},
 };
@@ -31,7 +31,7 @@ use std::{
 };
 use tracing::warn;
 
-use super::SlotSource;
+use super::{bidding::private_bid::{DynamicOverbidSlotBidder, DynamicOverbidSlotBidderService}, SlotSource};
 
 /// Prefix for env variables in config
 const ENV_PREFIX: &str = "env:";
@@ -174,7 +174,7 @@ impl BaseConfig {
 
                 global_cancellation: cancellation_token,
 
-                bidding_service: Box::new(DummyBiddingService {}),
+                bidding_service: Box::new( DynamicOverbidSlotBidderService::default()),
                 extra_rpc: RpcModule::new(()),
                 sink_factory,
                 builders: Vec::new(),

@@ -1,12 +1,11 @@
 use alloy_primitives::U256;
 use revm_primitives::Address;
 use time::OffsetDateTime;
-use std::{fmt, hash::{Hash, Hasher}, str::FromStr, sync::Mutex};
+use std::{fmt, hash::{Hash, Hasher}, str::FromStr, sync::{Arc, Mutex}};
 use tracing::{info, warn};
-
 use crate::primitives::mev_boost::MevBoostRelay;
 
-use super::{SealInstruction, SlotBidder};
+use super::{BiddingService, SealInstruction, SlotBidder};
 use serde::{Deserialize, Deserializer, Serialize};
 use curl::easy::Easy;
 
@@ -73,7 +72,7 @@ impl PartialOrd for BidTrace {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DynamicOverbidSlotBidder {
     max_overbid_percentage: u64,
     overbid_increment: u64,
@@ -175,6 +174,19 @@ impl SlotBidder for DynamicOverbidSlotBidder {
 
     }
 }
+
+
+/// Creates () which implements the dummy SlotBidder which bids all true value
+#[derive(Debug, Default)]
+pub struct DynamicOverbidSlotBidderService {
+    pub slot_bidder: DynamicOverbidSlotBidder,
+}
+impl BiddingService for DynamicOverbidSlotBidderService {
+    fn create_slot_bidder(&mut self, _: u64, _: u64, _: u64) -> Arc<dyn SlotBidder> {
+        Arc::new(DynamicOverbidSlotBidder::new(10, 100, 10).unwrap())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
