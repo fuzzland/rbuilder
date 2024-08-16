@@ -728,6 +728,7 @@ pub struct SimValue {
     pub mev_gas_price: U256,
     /// Kickbacks paid during simulation as (receiver, amount)
     pub paid_kickbacks: Vec<(Address, U256)>,
+    pub private_order_priority_coinbase_profit: U256
 }
 
 impl SimValue {
@@ -736,6 +737,7 @@ impl SimValue {
         gas_used: u64,
         blob_gas_used: u64,
         paid_kickbacks: Vec<(Address, U256)>,
+        private_order_priority_coinbase_profit: U256
     ) -> Self {
         let mev_gas_price = if gas_used != 0 {
             coinbase_profit / U256::from(gas_used)
@@ -748,6 +750,7 @@ impl SimValue {
             blob_gas_used,
             mev_gas_price,
             paid_kickbacks,
+            private_order_priority_coinbase_profit
         }
     }
 }

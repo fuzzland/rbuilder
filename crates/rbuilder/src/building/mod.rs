@@ -259,6 +259,8 @@ pub enum Sorting {
     MevGasPrice,
     /// Sorts the SimulatedOrders by its absolute profit which is computed as the coinbase balance delta after executing the order
     MaxProfit,
+
+    PrivateOrderPriority
 }
 
 impl Sorting {
@@ -266,6 +268,7 @@ impl Sorting {
         match self {
             Sorting::MevGasPrice => sim_value.mev_gas_price,
             Sorting::MaxProfit => sim_value.coinbase_profit,
+            Sorting::PrivateOrderPriority => sim_value.private_order_priority_coinbase_profit
         }
     }
 }
@@ -277,6 +280,7 @@ impl FromStr for Sorting {
         match s {
             "mev_gas_price" => Ok(Self::MevGasPrice),
             "max_profit" => Ok(Self::MaxProfit),
+            "private_order_priority" => Ok(Self::PrivateOrderPriority),
             _ => eyre::bail!("Invalid algorithm"),
         }
     }
@@ -286,6 +290,7 @@ impl std::fmt::Display for Sorting {
         match self {
             Sorting::MevGasPrice => write!(f, "mev_gas_price"),
             Sorting::MaxProfit => write!(f, "max_profit"),
+            Sorting::PrivateOrderPriority => write!(f, "private_order_priority"),
         }
     }
 }
@@ -441,6 +446,7 @@ impl<Tracer: SimulationTracer> PartialBlock<Tracer> {
             ok_result.gas_used,
             ok_result.blob_gas_used,
             ok_result.paid_kickbacks.clone(),
+            ok_result.private_order_priority_coinbase_profit
         );
         if let Some(enforce_sorting) = self.enforce_sorting {
             match enforce_inplace_sim_result(enforce_sorting, &order.sim_value, &inplace_sim_result)
@@ -815,5 +821,47 @@ mod tests {
             ..Default::default()
         };
         assert!(enforce_inplace_sim_result(sort, sim_result, inplace_sim_result).is_ok());
+    }
+
+    #[test]
+    fn test_enforce_inplace_sim_result_private_order_priority_coinbase_profit() {
+        let sort = Sorting::PrivateOrderPriority;
+        let sim_result = &SimValue {
+            coinbase_profit: U256::from(0),
+            mev_gas_price: U256::from(100),
+            gas_used: 100,
+            private_order_priority_coinbase_profit: U256::from(100),
+            ..Default::default()
+        };
+
+        let inplace_sim_result = &SimValue {
+            coinbase_profit: U256::from(100),
+            mev_gas_price: U256::from(150),
+            gas_used: 100,
+            private_order_priority_coinbase_profit: U256::from(90),
+            ..Default::default()
+        };
+        assert!(enforce_inplace_sim_result(sort, sim_result, inplace_sim_result).is_err());
+
+        // Equal to original value
+        let inplace_sim_result = &SimValue {
+            coinbase_profit: U256::from(100),
+            mev_gas_price: U256::from(150),
+            gas_used: 100,
+            private_order_priority_coinbase_profit: U256::from(100),
+            ..Default::default()
+        };
+        assert!(enforce_inplace_sim_result(sort, sim_result, inplace_sim_result).is_ok());
+
+        // Higher than original value
+        let inplace_sim_result = &SimValue {
+            coinbase_profit: U256::from(100),
+            mev_gas_price: U256::from(150),
+            gas_used: 100,
+            private_order_priority_coinbase_profit: U256::from(110),
+            ..Default::default()
+        };
+        assert!(enforce_inplace_sim_result(sort, sim_result, inplace_sim_result).is_ok());
+
     }
 }

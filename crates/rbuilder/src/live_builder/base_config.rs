@@ -31,7 +31,7 @@ use std::{
 };
 use tracing::warn;
 
-use super::{bidding::private_bid::{DynamicOverbidSlotBidder, DynamicOverbidSlotBidderService}, SlotSource};
+use super::{bidding::private_bid::DynamicOverbidSlotBidderService, SlotSource};
 
 /// Prefix for env variables in config
 const ENV_PREFIX: &str = "env:";

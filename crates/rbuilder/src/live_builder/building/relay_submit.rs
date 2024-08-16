@@ -19,7 +19,8 @@ use ahash::HashMap;
 use alloy_primitives::{utils::format_ether, U256};
 use reth_chainspec::ChainSpec;
 use reth_primitives::SealedBlock;
-use std::{sync::Arc, time::Duration};
+use revm_primitives::Address;
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info_span, trace, warn, Instrument};
@@ -136,8 +137,9 @@ async fn run_submit_to_relays_job(
         let submission_optimistic =
             config.optimistic_enabled && block.trace.bid_value < config.optimistic_max_bid_value;
 
+       let best_bid_value = U256::default();
+    //    let best_bid_value = slot_bidder.best_bid_value(&relays, block.sealed_block.number).unwrap_or_default();
 
-       let best_bid_value = slot_bidder.best_bid_value(&relays, block.sealed_block.number).unwrap_or_default();
 
         let submission_span = info_span!(
             "bid",
@@ -235,6 +237,12 @@ async fn run_submit_to_relays_job(
                 }
                 .instrument(span),
             );
+        }
+
+        // todo! judge transaction in block index
+        let index = fast_find_builder_tx(None, &block.sealed_block);
+        if index == 0 as u32 {
+            debug!("\n ================= success find rpc tranaction in block ================= \n ");
         }
 
         if submission_optimistic {
@@ -498,4 +506,24 @@ impl BuilderSinkFactory for RelaySubmitSinkFactory {
         ));
         best_bid
     }
+}
+
+
+
+fn fast_find_builder_tx(builder: Option<Address>, sealed_block: &SealedBlock) -> u32 {
+    let builder = if let Some(builder) = &builder {
+        builder
+    } else {
+        &Address::from_str("1aE346CF7A3dFB2A841a7B7875374307b0Fc5f0B").unwrap()
+    };
+    let mut builder_tx = 0;
+    for (i, tx) in sealed_block.body.iter().enumerate() {
+        builder_tx = i as u32 + 1;
+        if let Some(tx_builder) = &tx.recover_signer() {
+            if tx_builder == builder {
+                return 0 as u32
+            }
+        }
+    }
+    return builder_tx
 }

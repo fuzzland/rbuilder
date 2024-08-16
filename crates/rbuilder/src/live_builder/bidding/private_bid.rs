@@ -148,7 +148,7 @@ impl DynamicOverbidSlotBidder {
         let best_bid = *self.best_bid.lock().unwrap();
         let overbid_amount = best_bid * U256::from(self.current_overbid_percentage) / U256::from(100);
         let our_bid = best_bid + overbid_amount;
-        U256::min(our_bid, unsealed_block_profit)
+        U256::max(our_bid, unsealed_block_profit)
     }
 }
 

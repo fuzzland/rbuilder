@@ -260,6 +260,7 @@ pub struct OrderOk {
     pub receipts: Vec<Receipt>,
     pub paid_kickbacks: Vec<(Address, U256)>,
     pub used_state_trace: Option<UsedStateTrace>,
+    pub private_order_priority_coinbase_profit: U256,
 }
 
 #[derive(Error, Debug, Eq, PartialEq)]
@@ -976,7 +977,7 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
     ) -> Result<Result<OrderOk, OrderErr>, CriticalCommitOrderError> {
         let coinbase_balance_before = self.state.balance(ctx.block_env.coinbase)?;
         match order {
-            Order::Tx(tx, _) => {
+            Order::Tx(tx, tx_from_builder) => {
                 let res = self.commit_tx(
                     &tx.tx_with_blobs,
                     ctx,
@@ -1008,12 +1009,13 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
                             paid_kickbacks: Vec::new(),
                             used_state_trace: self.get_used_state_trace(),
                             original_order_ids: Vec::new(),
+                            private_order_priority_coinbase_profit: coinbase_profit + U256::from(tx_from_builder.to_owned() as u32),
                         }))
                     }
                     Err(err) => Ok(Err(err.into())),
                 }
             }
-            Order::Bundle(bundle, _) => {
+            Order::Bundle(bundle, tx_from_builder) => {
                 let res = self.commit_bundle(
                     bundle,
                     ctx,
@@ -1046,12 +1048,14 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
                             paid_kickbacks: ok.paid_kickbacks,
                             used_state_trace: self.get_used_state_trace(),
                             original_order_ids: ok.original_order_ids,
+                            private_order_priority_coinbase_profit: coinbase_profit + U256::from(tx_from_builder.to_owned() as u32),
                         }))
                     }
                     Err(err) => Ok(Err(err.into())),
                 }
             }
-            Order::ShareBundle(bundle, _) => {
+
+            Order::ShareBundle(bundle, tx_from_builder) => {
                 let res = self.commit_share_bundle(
                     bundle,
                     ctx,
@@ -1084,6 +1088,7 @@ impl<'a, 'b, 'c, Tracer: SimulationTracer> PartialBlockFork<'a, 'b, 'c, Tracer> 
                             paid_kickbacks: ok.paid_kickbacks,
                             used_state_trace: self.get_used_state_trace(),
                             original_order_ids: ok.original_order_ids,
+                            private_order_priority_coinbase_profit: coinbase_profit + U256::from(tx_from_builder.to_owned() as u32),
                         }))
                     }
                     Err(err) => Ok(Err(err.into())),

@@ -452,6 +452,7 @@ pub fn simulate_order_using_fork<Tracer: SimulationTracer>(
                 res.gas_used,
                 res.blob_gas_used,
                 res.paid_kickbacks,
+                res.coinbase_profit
             );
             let new_nonces = res.nonces_updated.into_iter().collect::<Vec<_>>();
             Ok(OrderSimResult::Success(
