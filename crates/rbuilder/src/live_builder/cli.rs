@@ -15,7 +15,7 @@ use crate::{
     utils::build_info::Version,
 };
 
-use super::{base_config::BaseConfig, building::relay_submit::RelaySubmitSinkFactory, LiveBuilder};
+use super::{base_config::BaseConfig, building::fast_relay_submit::RelaySubmitSinkFactory, LiveBuilder};
 
 #[derive(Parser, Debug)]
 enum Cli {

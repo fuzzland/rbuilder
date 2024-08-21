@@ -1,4 +1,5 @@
 pub mod private_bid;
+pub mod socket_bid;
 
 use std::sync::Arc;
 use alloy_primitives::U256;

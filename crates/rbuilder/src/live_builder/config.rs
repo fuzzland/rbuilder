@@ -1,7 +1,7 @@
 //! Config should always be deserializable, default values should be used
 //!
 //!
-use super::{base_config::BaseConfig, building::relay_submit::RelaySubmitSinkFactory};
+use super::{base_config::BaseConfig, building::fast_relay_submit::{RelaySubmitSinkFactory, SubmissionConfig}};
 use crate::{
     beacon_api_client::Client,
     building::{
@@ -13,7 +13,7 @@ use crate::{
     },
     flashbots::BlocksProcessorClient,
     live_builder::{
-        base_config::EnvOrValue, building::SubmissionConfig, cli::LiveBuilderConfig,
+        base_config::EnvOrValue, cli::LiveBuilderConfig,
         payload_events::MevBoostSlotDataGenerator,
     },
     mev_boost::BLSBlockSigner,
@@ -266,7 +266,7 @@ impl LiveBuilderConfig for Config {
     ) -> eyre::Result<
         super::LiveBuilder<
             Arc<DatabaseEnv>,
-            super::building::relay_submit::RelaySubmitSinkFactory,
+            super::building::fast_relay_submit::RelaySubmitSinkFactory,
             MevBoostSlotDataGenerator,
         >,
     > {

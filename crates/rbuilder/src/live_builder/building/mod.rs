@@ -1,4 +1,5 @@
 pub mod relay_submit;
+pub mod fast_relay_submit;
 
 use std::{sync::Arc, time::Duration};
 

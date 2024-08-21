@@ -1,13 +1,13 @@
 use crate::{
-    building::builders::{BestBlockCell, BuilderSinkFactory},
+    building::builders::{BestBlockCell, Block, BuilderSinkFactory},
     flashbots::BlocksProcessorClient,
-    live_builder::{bidding::SlotBidder, payload_events::MevBoostSlotData},
+    live_builder::{bidding::{socket_bid::TopBidWatcher, SlotBidder}, payload_events::MevBoostSlotData},
     mev_boost::{
         sign_block_for_relay, BLSBlockSigner, RelayError, SubmitBlockErr, SubmitBlockRequest,
     },
     primitives::mev_boost::{MevBoostRelay, MevBoostRelayID},
     telemetry::{
-        add_relay_submit_time, add_subsidy_value, inc_blocks_api_errors, inc_conn_relay_errors,
+        add_relay_submit_time, add_subsidy_value, inc_conn_relay_errors,
         inc_failed_block_simulations, inc_initiated_submissions, inc_other_relay_errors,
         inc_relay_accepted_submissions, inc_subsidized_blocks, inc_too_many_req_relay_errors,
         measure_block_e2e_latency,
@@ -21,7 +21,7 @@ use reth_chainspec::ChainSpec;
 use reth_primitives::SealedBlock;
 use revm_primitives::Address;
 use std::{str::FromStr, sync::Arc, time::Duration};
-use tokio::time::{sleep, Instant};
+use tokio::{sync::{broadcast, watch}, time::{sleep, Instant}};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info_span, trace, warn, Instrument};
 
@@ -46,9 +46,6 @@ pub struct SubmissionConfig {
     pub slot_delta_to_start_submits: time::Duration,
 }
 
-/// run_submit_to_relays_job waits at least MIN_TIME_BETWEEN_BLOCK_CHECK between new block polls to avoid 100% CPU
-const MIN_TIME_BETWEEN_BLOCK_CHECK: Duration = Duration::from_millis(5);
-
 /// Values from [`BuiltBlockTrace`]
 struct BuiltBlockInfo {
     pub bid_value: U256,
@@ -68,13 +65,14 @@ struct BuiltBlockInfo {
 #[allow(clippy::too_many_arguments)]
 async fn run_submit_to_relays_job(
     best_bid: BestBlockCell,
+    mut block_rx: broadcast::Receiver<Option<Block>>,
+    mut best_bid_rx: watch::Receiver<U256>,
     slot_data: MevBoostSlotData,
     relays: Vec<MevBoostRelay>,
     config: SubmissionConfig,
     cancel: CancellationToken,
-    slot_bidder: Arc<dyn SlotBidder>,
 ) -> Option<BuiltBlockInfo> {
-    let mut res = None;
+
     // first, sleep to slot time - slot_delta_to_start_submits
     {
         let submit_start_time = slot_data.timestamp() + config.slot_delta_to_start_submits;
@@ -99,101 +97,97 @@ async fn run_submit_to_relays_job(
 
     let mut last_bid_value = U256::from(0);
     let mut last_submit_time = Instant::now();
-    'submit: loop {
-        if cancel.is_cancelled() {
-            break 'submit res;
-        }
 
-        let time_since_submit = last_submit_time.elapsed();
-        if time_since_submit < MIN_TIME_BETWEEN_BLOCK_CHECK {
-            sleep(MIN_TIME_BETWEEN_BLOCK_CHECK - time_since_submit).await;
-        }
-        last_submit_time = Instant::now();
 
-        let block = if let Some(new_block) = best_bid.take_best_block() {
-            if new_block.trace.bid_value > last_bid_value {
-                last_bid_value = new_block.trace.bid_value;
-                new_block
-            } else {
-                continue 'submit;
+    loop {
+        let block: Option<Block> = tokio::select! {
+            Ok(_) = best_bid_rx.changed() => {
+                let new_best_bid = *best_bid_rx.borrow();
+                if let Some(block) = best_bid.take_best_block() {
+                    let best_bid = best_bid_algo(block.trace.bid_value, new_best_bid);
+                    if best_bid > last_bid_value {
+                        last_bid_value = best_bid;
+                    }
+                    Some(block)
+                } else {
+                    None
+                }
+
             }
-        } else {
-            continue 'submit;
+            Ok(Some(block)) = block_rx.recv() => {
+                let current_best_bid = *best_bid_rx.borrow();
+                let best_bid = best_bid_algo(block.trace.bid_value, current_best_bid);
+                last_bid_value = best_bid;
+                Some(block)
+            }
         };
 
-        res = Some(BuiltBlockInfo {
-            bid_value: block.trace.bid_value,
-            true_bid_value: block.trace.true_bid_value,
-        });
+        if let Some(block) = block {
 
-        let builder_name = block.builder_name.clone();
+            let bundles = block
+                .trace
+                .included_orders
+                .iter()
+                .filter(|o| !o.order.is_tx())
+                .count();
+            let submission_optimistic =
+                config.optimistic_enabled && block.trace.bid_value < config.optimistic_max_bid_value;
 
-        let bundles = block
-            .trace
-            .included_orders
-            .iter()
-            .filter(|o| !o.order.is_tx())
-            .count();
-        let submission_optimistic =
-            config.optimistic_enabled && block.trace.bid_value < config.optimistic_max_bid_value;
+            let submission_span = info_span!(
+                "bid",
+                bid_value = format_ether(block.trace.bid_value),
+                best_bid_value = format_ether(last_bid_value),
+                true_bid_value = format_ether(block.trace.true_bid_value),
+                block = block.sealed_block.number,
+                hash = ?block.sealed_block.header.hash(),
+                gas = block.sealed_block.gas_used,
+                txs = block.sealed_block.body.len(),
+                bundles,
+                buidler_name = block.builder_name,
+                fill_time_ms = block.trace.fill_time.as_millis(),
+                finalize_time_ms = block.trace.finalize_time.as_millis(),
+            );
+            debug!(
+                parent: &submission_span,
+                "Submitting bid",
+            );
+            inc_initiated_submissions(submission_optimistic);
 
-       let best_bid_value = U256::default();
-    //    let best_bid_value = slot_bidder.best_bid_value(&relays, block.sealed_block.number).unwrap_or_default();
-
-
-        let submission_span = info_span!(
-            "bid",
-            bid_value = format_ether(block.trace.bid_value),
-            best_bid_value = format_ether(best_bid_value),
-            true_bid_value = format_ether(block.trace.true_bid_value),
-            block = block.sealed_block.number,
-            hash = ?block.sealed_block.header.hash(),
-            gas = block.sealed_block.gas_used,
-            txs = block.sealed_block.body.len(),
-            bundles,
-            buidler_name = block.builder_name,
-            fill_time_ms = block.trace.fill_time.as_millis(),
-            finalize_time_ms = block.trace.finalize_time.as_millis(),
-        );
-        debug!(
-            parent: &submission_span,
-            "Submitting bid",
-        );
-        inc_initiated_submissions(submission_optimistic);
-
-        let (normal_signed_submission, optimistic_signed_submission) = {
-            let normal_signed_submission = match sign_block_for_relay(
-                &config.signer,
-                &block.sealed_block,
-                &block.txs_blobs_sidecars,
-                &config.chain_spec,
-                &slot_data.payload_attributes_event.data,
-                slot_data.slot_data.pubkey,
-                block.trace.bid_value,
-            ) {
-                Ok(res) => res,
-                Err(err) => {
-                    error!(parent: &submission_span, err = ?err, "Error signing block for relay");
-                    continue 'submit;
-                }
+            let (normal_signed_submission, optimistic_signed_submission) = {
+                let normal_signed_submission = match sign_block_for_relay(
+                    &config.signer,
+                    &block.sealed_block,
+                    &block.txs_blobs_sidecars,
+                    &config.chain_spec,
+                    &slot_data.payload_attributes_event.data,
+                    slot_data.slot_data.pubkey,
+                    block.trace.bid_value,
+                ) {
+                    Ok(res) => res,
+                    Err(err) => {
+                        error!(parent: &submission_span, err = ?err, "Error signing block for relay");
+                        continue;
+                    }
+                };
+                let optimistic_signed_submission = match sign_block_for_relay(
+                    &config.optimistic_signer,
+                    &block.sealed_block,
+                    &block.txs_blobs_sidecars,
+                    &config.chain_spec,
+                    &slot_data.payload_attributes_event.data,
+                    slot_data.slot_data.pubkey,
+                    block.trace.bid_value,
+                ) {
+                    Ok(res) => res,
+                    Err(err) => {
+                        error!(parent: &submission_span, err = ?err, "Error signing block for relay");
+                        continue;
+                    }
+                };
+                (normal_signed_submission, optimistic_signed_submission)
             };
-            let optimistic_signed_submission = match sign_block_for_relay(
-                &config.optimistic_signer,
-                &block.sealed_block,
-                &block.txs_blobs_sidecars,
-                &config.chain_spec,
-                &slot_data.payload_attributes_event.data,
-                slot_data.slot_data.pubkey,
-                block.trace.bid_value,
-            ) {
-                Ok(res) => res,
-                Err(err) => {
-                    error!(parent: &submission_span, err = ?err, "Error signing block for relay");
-                    continue 'submit;
-                }
-            };
-            (normal_signed_submission, optimistic_signed_submission)
-        };
+
+
 
         if config.dry_run {
             match validate_block(
@@ -221,7 +215,7 @@ async fn run_submit_to_relays_job(
                     );
                 }
             }
-            continue 'submit;
+            continue;
         }
 
         measure_block_e2e_latency(&block.trace.included_orders);
@@ -312,24 +306,8 @@ async fn run_submit_to_relays_job(
                 );
             }
         }
-
-        if let Some(blocks_processor) = config.blocks_processor.clone() {
-            let cancel = cancel.clone();
-            tokio::spawn(async move {
-                let block_processor_result = tokio::select! {
-                    _ = cancel.cancelled() => {
-                        return;
-                    },
-                    // NOTE: we only store normal submission here because they have the same contents but different pubkeys
-                    res = blocks_processor.submit_built_block(&block.sealed_block, &normal_signed_submission, &block.trace, builder_name, best_bid_value) => res
-                };
-                if let Err(err) = block_processor_result {
-                    inc_blocks_api_errors();
-                    warn!(parent: &submission_span, "Failed to submit block to the blocks api: {}", err);
-                }
-            });
-        }
     }
+}
 
 
 
@@ -337,19 +315,21 @@ async fn run_submit_to_relays_job(
 
 pub async fn run_submit_to_relays_job_and_metrics(
     best_bid: BestBlockCell,
+    block_rx: broadcast::Receiver<Option<Block>>,
+    best_bid_rx: watch::Receiver<U256>,
     slot_data: MevBoostSlotData,
     relays: Vec<MevBoostRelay>,
     config: SubmissionConfig,
     cancel: CancellationToken,
-    slot_bidder: Arc<dyn SlotBidder>,
 ) {
     let best_bid = run_submit_to_relays_job(
         best_bid.clone(),
+        block_rx,
+        best_bid_rx,
         slot_data,
         relays,
         config,
         cancel,
-        slot_bidder,
     )
     .await;
     if let Some(best_bid) = best_bid {
@@ -482,10 +462,11 @@ impl BuilderSinkFactory for RelaySubmitSinkFactory {
     fn create_builder_sink(
         &self,
         slot_data: MevBoostSlotData,
-        slot_bidder: Arc<dyn SlotBidder>,
+        _slot_bidder: Arc<dyn SlotBidder>,
         cancel: CancellationToken,
     ) -> BestBlockCell {
         let best_bid = BestBlockCell::default();
+        let block_rx = best_bid.get_receiver();
 
         let relays = slot_data
             .relays
@@ -499,15 +480,24 @@ impl BuilderSinkFactory for RelaySubmitSinkFactory {
             .collect();
 
         // add best bid watcher to the sink
-        // add block watcher to the sink
+        // add block channel to the sink
+
+        let (top_bid_watcher, best_bid_receiver) = TopBidWatcher::new();
+
+        let _handle = tokio::spawn(async move {
+            if let Err(e) = top_bid_watcher.run().await {
+                panic!("TopBidWatcher run failed: {:?}", e);
+            }
+        });
 
         tokio::spawn(run_submit_to_relays_job_and_metrics(
             best_bid.clone(),
+            block_rx,
+            best_bid_receiver,
             slot_data,
             relays,
             self.submission_config.clone(),
             cancel,
-            slot_bidder,
         ));
         best_bid
     }
@@ -531,4 +521,18 @@ fn fast_find_builder_tx(builder: Option<Address>, sealed_block: &SealedBlock) ->
         }
     }
     return builder_tx
+}
+
+pub fn best_bid_algo(block_bid: U256, other_best_bid: U256) -> U256 {
+    let block_bid_limit = U256::from_str("1000000000000").unwrap();
+    let block_bid = if other_best_bid > block_bid {
+        block_bid
+    } else {
+        other_best_bid
+    };
+    if block_bid < block_bid_limit {
+        return block_bid;
+    } else {
+        return block_bid_limit;
+    }
 }

@@ -27,7 +27,7 @@ use std::{
     cmp::max,
     sync::{Arc, Mutex},
 };
-use tokio::sync::{broadcast, broadcast::error::TryRecvError};
+use tokio::sync::{broadcast::{self, error::TryRecvError}, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -46,12 +46,15 @@ pub struct Block {
 #[derive(Debug, Clone)]
 pub struct BestBlockCell {
     val: Arc<Mutex<Option<Block>>>,
+    sender: broadcast::Sender<Option<Block>>,
 }
 
 impl Default for BestBlockCell {
     fn default() -> Self {
+        let (sender, _receiver) = broadcast::channel::<Option<Block>>(3000);
         Self {
             val: Arc::new(Mutex::new(None)),
+            sender
         }
     }
 }
@@ -70,12 +73,17 @@ impl BestBlockCell {
             .map(|b| b.trace.bid_value)
             .unwrap_or_default();
         if block.trace.bid_value > old_value {
-            *best_block = Some(block);
+            *best_block = Some(block.clone());
+            let _ = self.sender.send(Some(block.clone()));
         }
     }
 
     pub fn take_best_block(&self) -> Option<Block> {
         self.val.lock().unwrap().take()
+    }
+
+    pub fn get_receiver(&self) -> broadcast::Receiver<Option<Block>>  {
+        self.sender.subscribe()
     }
 }
 
